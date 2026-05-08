@@ -1,0 +1,12 @@
+Logs/
+Library/
+Temp/
+/.vs/My project/v17/*.db
+/.vs/My project/v17/*.suo
+/*.vsconfig
+/*.csproj
+/obj
+/.vs/
+/.sln
+/*.user
+UserSettings/Layouts/default-2022.dwlt
