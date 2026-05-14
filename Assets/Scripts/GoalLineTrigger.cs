@@ -1,30 +1,31 @@
 using UnityEngine;
 
-/// <summary>
-/// Detects when the ball crosses the goal line and notifies PenaltyTargetSelector.
-/// </summary>
 public class GoalLineTrigger : MonoBehaviour
 {
     [Header("References")]
-    public PenaltyTargetSelector penaltySelector;
+    public PenaltyResetController resetController;
 
     private bool triggered = false;
 
     private void OnTriggerEnter(Collider other)
     {
-        if (triggered) return;
-        if (!other.CompareTag("Ball")) return;
+        if (triggered || !other.CompareTag("Ball")) return;
 
         triggered = true;
-        Debug.Log("⚽ GOL!");
+        Debug.Log("⚽ GOL DETECTADO");
 
         ScoreData.WhiteScore++;
 
-        penaltySelector?.OnGoalScored();
-
-        // Re-arm after a moment (reset handled by PenaltyTargetSelector coroutine)
-        Invoke(nameof(ReArm), 3f);
+        // Usamos el reset suave para no recargar la escena y perder datos
+        Invoke(nameof(ExecuteSoftReset), 2f);
     }
 
-    private void ReArm() => triggered = false;
+    private void ExecuteSoftReset()
+    {
+        if (resetController != null)
+        {
+            resetController.FullReset();
+            triggered = false;
+        }
+    }
 }

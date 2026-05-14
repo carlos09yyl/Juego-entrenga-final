@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections;
-using UnityEngine.SceneManagement;   // 👈 IMPORTANTE
+using UnityEngine.SceneManagement;
 
 public class PenaltySystem : MonoBehaviour
 {
@@ -21,7 +21,7 @@ public class PenaltySystem : MonoBehaviour
         {
             if (!ballController)
             {
-                Debug.LogError("❌ BallController NO asignado en PenaltySystem");
+                Debug.LogError("❌ BallController NO asignado");
                 return;
             }
 
@@ -39,28 +39,22 @@ public class PenaltySystem : MonoBehaviour
 
     IEnumerator KickBall(Vector3 direction)
     {
-        Debug.Log("⚽ Animación de patear se inicia");
+        Debug.Log("⚽ Animación de patear");
 
         yield return new WaitForSeconds(kickDelay);
 
         if (!ballController)
         {
-            Debug.LogError("❌ BallController es NULL en KickBall()");
+            Debug.LogError("❌ BallController NULL");
             yield break;
         }
 
-        Debug.Log("🚀 Balón lanzado");
         ballController.Launch(direction);
     }
 
-    // 🔔 Llamado por GoalAreaTrigger
     public void OnBallEnteredGoalArea()
     {
-        if (!goalkeeperController)
-        {
-            Debug.LogError("❌ GoalkeeperController NO asignado");
-            return;
-        }
+        if (!goalkeeperController) return;
 
         if (!hasGoalkeeperMoved)
         {
@@ -69,45 +63,32 @@ public class PenaltySystem : MonoBehaviour
         }
     }
 
-    // 🔔 Llamado por GoalLineTrigger
     public void OnGoalScored()
     {
         Debug.Log("🥅 ¡GOL!");
-        ResetPenalty();
+        SceneManager.LoadScene("ScoreScene");
     }
 
-    // 🔔 Llamado cuando el arquero tapa el balón
     public void OnBallSavedByGoalkeeper()
     {
-        Debug.Log("🧤 ¡El arquero atajó!");
+        Debug.Log("🧤 Atajó");
         ResetPenalty();
     }
 
     void MoveGoalkeeperRandom()
     {
-        if (divePoints == null || divePoints.Length == 0)
-        {
-            Debug.LogError("❌ DivePoints no asignados");
-            return;
-        }
+        if (divePoints == null || divePoints.Length == 0) return;
 
         int index = Random.Range(0, divePoints.Length);
         Transform target = divePoints[index];
 
-        if (!target)
-        {
-            Debug.LogError("❌ DivePoint NULL");
-            return;
-        }
+        if (!target) return;
 
         goalkeeperController.PrepareReaction(target);
-        Debug.Log("🧍‍♂️ Arquero se prepara para: " + target.name);
     }
 
-    // 🔥 RESET CORRECTO: REINICIA TODA LA ESCENA
     void ResetPenalty()
     {
-        Debug.Log("🔄 Reiniciando escena completa...");
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
