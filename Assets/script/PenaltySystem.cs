@@ -2,6 +2,13 @@ using UnityEngine;
 using System.Collections;
 using UnityEngine.SceneManagement;
 
+/// <summary>
+/// DEPRECATED — replaced entirely by PenaltyTargetSelector.
+/// This component is kept for reference only and must remain disabled in the Inspector.
+/// Enabling it will conflict with PenaltyTargetSelector: Space input, ball launch
+/// direction and scene loading will all be handled twice.
+/// </summary>
+[DisallowMultipleComponent]
 public class PenaltySystem : MonoBehaviour
 {
     [Header("Referencias")]
@@ -14,6 +21,13 @@ public class PenaltySystem : MonoBehaviour
 
     private bool hasGoalkeeperMoved = false;
     private bool canKick = true;
+
+    void Awake()
+    {
+        // Self-disable to guarantee it never interferes with PenaltyTargetSelector.
+        enabled = false;
+        Debug.LogWarning("[PenaltySystem] Script deshabilitado — usa PenaltyTargetSelector.");
+    }
 
     void Update()
     {

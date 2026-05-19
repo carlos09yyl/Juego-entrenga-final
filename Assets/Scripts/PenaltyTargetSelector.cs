@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Central controller for the 3-attempt penalty system.
@@ -35,23 +36,32 @@ public class PenaltyTargetSelector : MonoBehaviour
     public PenaltyResetController resetController;
     public GameEndUI              gameEndUI;
 
+    [Header("Scene Transition")]
+    [Tooltip("Name of the scene to load when all attempts are done. " +
+             "Used only if GameEndUI is not assigned.")]
+    public string scoreSceneName = "ScoreScene";
+
     [Header("3D World indicator")]
     public Transform worldIndicator;
 
     [Header("Attempt Configuration  (index 0 = attempt 1)")]
-    public int maxAttempts = 3;
+    public int maxAttempts = 5;
 
     [Tooltip("Ball launch speed for each attempt.")]
-    public float[] ballSpeedsPerAttempt = { 4f, 6f, 7f };
+    public float[] ballSpeedsPerAttempt = { 4f, 5f, 6f, 6.5f, 7f };
 
     [Tooltip("Goalkeeper move speed for each attempt.")]
-    public float[] keeperSpeedsPerAttempt = { 2f, 3.5f, 5f };
+    public float[] keeperSpeedsPerAttempt = { 2f, 2.5f, 3.5f, 4.5f, 5f };
 
     [Tooltip("Probability [0-1] that the keeper guesses the correct column per attempt.")]
-    public float[] keeperAccuracyPerAttempt = { 0.2f, 0.4f, 0.5f };
+    public float[] keeperAccuracyPerAttempt = { 0.2f, 0.3f, 0.4f, 0.45f, 0.5f };
 
     [Header("Timing — fallback if no Animation Event fires")]
     public float shotAnimDelay = 1.2f;
+
+    [Header("Ball Out-of-Play Timeout")]
+    [Tooltip("Seconds after the ball is launched before forcing a reset if no trigger fired.")]
+    public float ballTimeoutSeconds = 4f;
 
     // ── Runtime state ─────────────────────────────────────────────────
 
@@ -61,6 +71,10 @@ public class PenaltyTargetSelector : MonoBehaviour
 
     private Transform pendingTarget;
     private Coroutine fallbackCoroutine;
+    private Coroutine ballTimeoutCoroutine;
+
+    /// <summary>Prevents duplicate outcome processing within a single turn.</summary>
+    private bool outcomeHandled = false;
 
     // Attempt tracking
     private int   currentAttempt   = 0;   // 0-based
@@ -204,8 +218,13 @@ public class PenaltyTargetSelector : MonoBehaviour
     {
         hasShotBeenFired  = true;
         isSelectingTarget = false;
-        selectorUI?.ShowUI(false);
-        SetWorldIndicator(false, Vector3.zero);
+
+        // Hide ALL HUD text immediately so nothing lingers during ball flight
+        selectorUI?.HideAllUI();
+
+        // Keep the world indicator on the target point while the ball is in flight
+        Vector3 targetPos = targetPoints[selectedIndex].position;
+        SetWorldIndicator(true, targetPos);
 
         pendingTarget = targetPoints[selectedIndex];
 
@@ -246,9 +265,29 @@ public class PenaltyTargetSelector : MonoBehaviour
             fallbackCoroutine = null;
         }
 
-        Vector3 direction = (pendingTarget.position - ballController.transform.position).normalized;
-        ballController.Launch(direction);
+        // LaunchToward adds an arc to compensate gravity so the ball actually crosses the goal line.
+        ballController.LaunchToward(pendingTarget.position);
         pendingTarget = null;
+
+        // Start timeout in case the ball escapes without hitting any trigger
+        outcomeHandled = false;
+        if (ballTimeoutCoroutine != null) StopCoroutine(ballTimeoutCoroutine);
+        ballTimeoutCoroutine = StartCoroutine(BallTimeout());
+    }
+
+    /// <summary>
+    /// Fires if neither GoalLineTrigger nor GoalKeeperSaveTrigger report an outcome
+    /// within <see cref="ballTimeoutSeconds"/>. Counts the attempt as a miss and resets.
+    /// </summary>
+    IEnumerator BallTimeout()
+    {
+        yield return new WaitForSeconds(ballTimeoutSeconds);
+
+        if (!outcomeHandled)
+        {
+            Debug.Log("[PenaltyTargetSelector] Timeout: el balón salió sin resultado. Contando como fallo.");
+            OnGoalkeeperSaved();   // counts as a miss / keeper win
+        }
     }
 
     // ── Goalkeeper target selection ───────────────────────────────────
@@ -280,6 +319,15 @@ public class PenaltyTargetSelector : MonoBehaviour
     /// <summary>Called by GoalLineTrigger when the ball crosses the goal line.</summary>
     public void OnGoalScored()
     {
+        if (outcomeHandled) return;
+        outcomeHandled = true;
+
+        if (ballTimeoutCoroutine != null)
+        {
+            StopCoroutine(ballTimeoutCoroutine);
+            ballTimeoutCoroutine = null;
+        }
+
         goalkeeperController?.Disarm();
 
         goalsScored++;
@@ -296,9 +344,18 @@ public class PenaltyTargetSelector : MonoBehaviour
             StartCoroutine(ResetForNextAttempt(ResetDelay));
     }
 
-    /// <summary>Called by GoalKeeperSaveTrigger when the keeper stops the ball.</summary>
+    /// <summary>Called by GoalKeeperSaveTrigger when the keeper stops the ball, or by BallTimeout on a miss.</summary>
     public void OnGoalkeeperSaved()
     {
+        if (outcomeHandled) return;
+        outcomeHandled = true;
+
+        if (ballTimeoutCoroutine != null)
+        {
+            StopCoroutine(ballTimeoutCoroutine);
+            ballTimeoutCoroutine = null;
+        }
+
         goalkeeperController?.Disarm();
         ScoreData.BlackScore++;
 
@@ -342,9 +399,14 @@ public class PenaltyTargetSelector : MonoBehaviour
         ApplyAttemptSettings();
 
         hasShotBeenFired  = false;
+        outcomeHandled    = false;
         selectedIndex     = 4;
         isSelectingTarget = false;
         SetWorldIndicator(false, Vector3.zero);
+
+        // Flash a visible message so the player knows a new attempt has started.
+        // ShowNewAttemptFeedback internally restores the idle hint when it finishes.
+        selectorUI?.ShowNewAttemptFeedback(currentAttempt + 1, maxAttempts);
     }
 
     IEnumerator FinishGame(float delay)
@@ -354,10 +416,20 @@ public class PenaltyTargetSelector : MonoBehaviour
 
         yield return new WaitForSeconds(0.5f);
 
-        // Show the inline end-of-game panel instead of loading a new scene
-        selectorUI?.ShowUI(false);
+        selectorUI?.HideAllUI();
         SetWorldIndicator(false, Vector3.zero);
-        gameEndUI?.ShowResults(goalsScored, maxAttempts);
+
+        if (gameEndUI != null)
+        {
+            // Inline end-of-game panel
+            gameEndUI.ShowResults(goalsScored, maxAttempts);
+        }
+        else
+        {
+            // Fallback: load the score scene directly
+            Debug.Log($"[PenaltyTargetSelector] GameEndUI no asignado — cargando escena '{scoreSceneName}'");
+            SceneManager.LoadScene(scoreSceneName);
+        }
     }
 
     // ── Restart (called by GameEndUI.PlayAgain) ───────────────────────
@@ -382,6 +454,7 @@ public class PenaltyTargetSelector : MonoBehaviour
 
         // Clear input state
         hasShotBeenFired  = false;
+        outcomeHandled    = false;
         selectedIndex     = 4;
         isSelectingTarget = false;
         SetWorldIndicator(false, Vector3.zero);

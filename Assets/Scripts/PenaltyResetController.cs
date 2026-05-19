@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -19,13 +20,12 @@ public class PenaltyResetController : MonoBehaviour
     public GoalkeeperController keeperController;
 
     [Header("Player")]
-    public Transform         playerTransform;
-    public Rigidbody         playerRigidbody;   // optional — assign if the player has one
+    public Transform            playerTransform;
+    public Rigidbody            playerRigidbody;   // optional — assign if the player has one
     public PlayerKickController playerKickController;
 
     // ── Animator idle state names ─────────────────────────────────────
     private const string KeeperIdleState = "mixamo_com";
-    private const string PlayerIdleState = "Idle";
 
     // ── Snapshot taken at scene start ─────────────────────────────────
     private Vector3    ballStartPos;
@@ -41,8 +41,10 @@ public class PenaltyResetController : MonoBehaviour
 
     // ─────────────────────────────────────────────────────────────────
 
-    void Awake()
+    void Start()
     {
+        // Take the snapshot in Start (not Awake) so all Rigidbodies have settled
+        // into their initial positions before we record them.
         TakeSnapshot();
     }
 
@@ -50,7 +52,7 @@ public class PenaltyResetController : MonoBehaviour
 
     /// <summary>
     /// Saves the current world positions and rotations of all three actors.
-    /// Called automatically in Awake; call again only if you need to redefine the baseline.
+    /// Called automatically in Start; call again only if you need to redefine the baseline.
     /// </summary>
     public void TakeSnapshot()
     {
@@ -60,6 +62,7 @@ public class PenaltyResetController : MonoBehaviour
             ballStartRot = ballRigidbody.rotation;
         }
 
+        // Goalkeeper — prefer Rigidbody, fall back to Transform
         if (keeperRigidbody != null)
         {
             keeperStartPos = keeperRigidbody.position;
@@ -71,7 +74,13 @@ public class PenaltyResetController : MonoBehaviour
             keeperStartRot = keeperController.transform.rotation;
         }
 
-        if (playerTransform != null)
+        // Player — prefer Rigidbody, fall back to Transform
+        if (playerRigidbody != null)
+        {
+            playerStartPos = playerRigidbody.position;
+            playerStartRot = playerRigidbody.rotation;
+        }
+        else if (playerTransform != null)
         {
             playerStartPos = playerTransform.position;
             playerStartRot = playerTransform.rotation;
@@ -109,8 +118,9 @@ public class PenaltyResetController : MonoBehaviour
 
         ballRigidbody.linearVelocity  = Vector3.zero;
         ballRigidbody.angularVelocity = Vector3.zero;
-        ballRigidbody.position        = ballStartPos;
-        ballRigidbody.rotation        = ballStartRot;
+        // Move via MovePosition so the physics engine acknowledges the teleport
+        ballRigidbody.MovePosition(ballStartPos);
+        ballRigidbody.MoveRotation(ballStartRot);
     }
 
     private void ResetKeeper()
@@ -118,17 +128,16 @@ public class PenaltyResetController : MonoBehaviour
         // Stop internal movement coroutines and clear flags via the controller
         keeperController?.ResetPosition(keeperStartPos, keeperStartRot);
 
-        // Rigidbody hard-reset (position already applied inside ResetPosition,
-        // but we also clear velocities here as a safety net)
+        // Rigidbody hard-reset — clears velocity and confirms position
         if (keeperRigidbody != null)
         {
             keeperRigidbody.linearVelocity  = Vector3.zero;
             keeperRigidbody.angularVelocity = Vector3.zero;
-            keeperRigidbody.position        = keeperStartPos;
-            keeperRigidbody.rotation        = keeperStartRot;
+            keeperRigidbody.MovePosition(keeperStartPos);
+            keeperRigidbody.MoveRotation(keeperStartRot);
         }
 
-        // Force idle animation
+        // Force idle animation as a safety net (GoalkeeperController.ResetPosition already does this)
         if (keeperAnimator != null)
         {
             keeperAnimator.ResetTrigger("Left");
@@ -142,18 +151,17 @@ public class PenaltyResetController : MonoBehaviour
 
     private void ResetPlayer()
     {
-        if (playerTransform != null)
-        {
-            playerTransform.position = playerStartPos;
-            playerTransform.rotation = playerStartRot;
-        }
-
         if (playerRigidbody != null)
         {
             playerRigidbody.linearVelocity  = Vector3.zero;
             playerRigidbody.angularVelocity = Vector3.zero;
-            playerRigidbody.position        = playerStartPos;
-            playerRigidbody.rotation        = playerStartRot;
+            playerRigidbody.MovePosition(playerStartPos);
+            playerRigidbody.MoveRotation(playerStartRot);
+        }
+        else if (playerTransform != null)
+        {
+            playerTransform.position = playerStartPos;
+            playerTransform.rotation = playerStartRot;
         }
 
         playerKickController?.ResetAnimator();

@@ -29,11 +29,10 @@ public class GoalKeeperSaveTrigger : MonoBehaviour
         triggered = true;
         Debug.Log("🧤 ¡El arquero atajó!");
 
-        ScoreData.BlackScore++;
-
+        // PenaltyTargetSelector.OnGoalkeeperSaved() handles scoring, reset and turn advance.
         penaltySelector?.OnGoalkeeperSaved();
 
-        Invoke(nameof(ReArm), 3f);
+        Invoke(nameof(ReArm), 6f);
     }
 
     private void ReArm() => triggered = false;

@@ -152,52 +152,35 @@ public class GoalkeeperController : MonoBehaviour
     {
         targetPosition = divePoint.position;
 
-        // Proyectamos la dirección al divePoint sobre el eje derecho LOCAL del portero.
-        // Esto es esencial porque el portero está rotado ~180° en Y:
-        // su "derecha local" apunta hacia -X mundo, por lo que calcular en espacio
-        // mundo produciría triggers invertidos.
-        Vector3 toTarget  = divePoint.position - transform.position;
-        float   localRight = Vector3.Dot(toTarget, transform.right);
+        // Use WORLD-space X difference instead of local-space projection.
+        // The goalkeeper faces the player (rotated ~180° on Y), so from the keeper's
+        // own perspective its left/right are swapped relative to the world.
+        // A positive worldDeltaX means the target is to the RIGHT in world space,
+        // which is to the keeper's LEFT from its facing direction.
+        // We flip the sign so "Right" animation = keeper dives to world +X,
+        // matching the side the ball is actually coming from.
+        float worldDeltaX = divePoint.position.x - transform.position.x;
 
-        Debug.Log($"[GoalkeeperController] localRight={localRight:F2}  threshold={centerThreshold}");
+        Debug.Log($"[GoalkeeperController] worldDeltaX={worldDeltaX:F2}  threshold={centerThreshold}");
 
         if (animator != null)
         {
             ResetAllTriggers();
 
-            if (Mathf.Abs(localRight) < centerThreshold)
+            if (Mathf.Abs(worldDeltaX) < centerThreshold)
                 animator.SetTrigger("Center");
-            else if (localRight > 0f)
-                animator.SetTrigger("Right");
+            else if (worldDeltaX > 0f)
+                animator.SetTrigger("Left");   // keeper dives toward world +X → its own Left
             else
-                animator.SetTrigger("Left");
+                animator.SetTrigger("Right");  // keeper dives toward world -X → its own Right
         }
 
-        StartMovementRoutine();
-    }
-
-    private void StartMovementRoutine()
-    {
+        // Start moving immediately — do not wait for animator state names.
         if (movementRoutine != null)
             StopCoroutine(movementRoutine);
 
-        movementRoutine = StartCoroutine(WaitForAnimationThenMove());
-    }
-
-    IEnumerator WaitForAnimationThenMove()
-    {
-        if (animator == null) yield break;
-
-        yield return new WaitUntil(() =>
-        {
-            AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
-            return state.IsName("Left")   ||
-                   state.IsName("Right")  ||
-                   state.IsName("Center") ||
-                   state.IsName("Jump");
-        });
-
-        isMoving = true;
+        isMoving        = true;
+        movementRoutine = null;
     }
 
     void LateUpdate()
