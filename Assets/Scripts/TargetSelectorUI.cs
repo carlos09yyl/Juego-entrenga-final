@@ -60,8 +60,8 @@ public class TargetSelectorUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Hides every HUD element immediately — call this the moment the ball is launched
-    /// so no text remains on screen during flight.
+    /// Hides every HUD element completely (selection panel, hint, feedback).
+    /// The persistent attempt/goals labels are preserved — call this only at game over.
     /// </summary>
     public void HideAllUI()
     {
@@ -74,7 +74,6 @@ public class TargetSelectorUI : MonoBehaviour
         if (selectionLabel != null)
             selectionLabel.gameObject.SetActive(false);
 
-        // Cancel any in-progress feedback flash
         if (feedbackCoroutine != null)
         {
             StopCoroutine(feedbackCoroutine);
@@ -83,6 +82,34 @@ public class TargetSelectorUI : MonoBehaviour
 
         if (feedbackLabel != null && feedbackLabel != hintLabel)
             feedbackLabel.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Hides the selection grid and hint text, but keeps the attempt counter and
+    /// goals label visible so the player always sees the current score.
+    /// Call this when the ball is launched or the grid is closed.
+    /// </summary>
+    public void HideSelectionOnlyUI()
+    {
+        if (panel != null)
+            panel.SetActive(false);
+
+        if (hintLabel != null)
+            hintLabel.gameObject.SetActive(false);
+
+        if (selectionLabel != null)
+            selectionLabel.gameObject.SetActive(false);
+
+        if (feedbackCoroutine != null)
+        {
+            StopCoroutine(feedbackCoroutine);
+            feedbackCoroutine = null;
+        }
+
+        if (feedbackLabel != null && feedbackLabel != hintLabel)
+            feedbackLabel.gameObject.SetActive(false);
+
+        // attemptLabel and goalsLabel are intentionally NOT hidden here.
     }
 
     /// <summary>Restores the idle hint label after the shot resolves.</summary>

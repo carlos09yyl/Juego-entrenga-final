@@ -3,12 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Central controller for the 3-attempt penalty system.
-///
-/// Attempt progression (0-based index):
-///   0 → ball slow  / keeper slow  / low accuracy
-///   1 → ball fast  / keeper medium/ medium accuracy
-///   2 → ball fast+ / keeper fast  / equal speed, coin-flip accuracy
+/// Central controller for the 5-attempt penalty system.
 ///
 /// Enter       → open / close target selection
 /// WASD/Arrows → navigate 3×3 grid
@@ -24,7 +19,7 @@ public class PenaltyTargetSelector : MonoBehaviour
 
     [Header("Goal target points (GoalArea children, row-major order)")]
     public Transform[] targetPoints;
-    public Transform goalArea;
+    public Transform   goalArea;
 
     [Header("References")]
     public BallController         ballController;
@@ -37,8 +32,7 @@ public class PenaltyTargetSelector : MonoBehaviour
     public GameEndUI              gameEndUI;
 
     [Header("Scene Transition")]
-    [Tooltip("Name of the scene to load when all attempts are done. " +
-             "Used only if GameEndUI is not assigned.")]
+    [Tooltip("Scene to load when all attempts are done if GameEndUI is not assigned.")]
     public string scoreSceneName = "ScoreScene";
 
     [Header("3D World indicator")]
@@ -56,32 +50,49 @@ public class PenaltyTargetSelector : MonoBehaviour
     [Tooltip("Probability [0-1] that the keeper guesses the correct column per attempt.")]
     public float[] keeperAccuracyPerAttempt = { 0.2f, 0.3f, 0.4f, 0.45f, 0.5f };
 
-    [Header("Timing — fallback if no Animation Event fires")]
+    [Header("Timing")]
+    [Tooltip("Seconds to wait for the kick animation before forcing ball launch.")]
     public float shotAnimDelay = 1.2f;
 
     [Header("Ball Out-of-Play Timeout")]
-    [Tooltip("Seconds after the ball is launched before forcing a reset if no trigger fired.")]
-    public float ballTimeoutSeconds = 4f;
+    [Tooltip("Seconds after ball launch before forcing a miss if no trigger fired.")]
+    public float ballTimeoutSeconds = 5f;
+
+    [Header("Dynamic Speed (based on selection time)")]
+    [Tooltip("Select within this many seconds → full max speed.")]
+    public float fastSelectionThreshold = 1.5f;
+    [Tooltip("Take this many seconds or more → minimum speed.")]
+    public float slowSelectionThreshold = 5f;
+    [Tooltip("Minimum ball speed regardless of selection time.")]
+    public float minBallSpeed = 3f;
+
+    // ── Turn state machine ────────────────────────────────────────────
+    // The game is always in exactly one of these phases.
+    private enum TurnPhase
+    {
+        WaitingForInput,   // player can press Enter to open the grid
+        Selecting,         // grid is open; player navigates and confirms
+        BallInFlight,      // ball has been launched; waiting for trigger or timeout
+        ResettingForNext,  // reset coroutine running; all input locked
+        GameOver           // no more turns
+    }
+
+    private TurnPhase phase = TurnPhase.WaitingForInput;
 
     // ── Runtime state ─────────────────────────────────────────────────
-
-    private bool      isSelectingTarget = false;
-    private bool      hasShotBeenFired  = false;
-    private int       selectedIndex     = 4;
+    private int   selectedIndex     = 4;
+    private int   currentAttempt    = 0;   // 0-based
+    private int   goalsScored       = 0;
+    private float reactionAccuracy  = 0.2f;
+    private float selectionStartTime = 0f;
+    private float currentMaxBallSpeed = 6f;
 
     private Transform pendingTarget;
     private Coroutine fallbackCoroutine;
     private Coroutine ballTimeoutCoroutine;
+    private Coroutine resetCoroutine;
 
-    /// <summary>Prevents duplicate outcome processing within a single turn.</summary>
-    private bool outcomeHandled = false;
-
-    // Attempt tracking
-    private int   currentAttempt   = 0;   // 0-based
-    private int   goalsScored      = 0;
-    private float reactionAccuracy = 0.2f;
-
-    // Player reset data
+    // Player reset data (fallback when no PenaltyResetController is wired)
     private Vector3    playerStartPos;
     private Quaternion playerStartRot;
 
@@ -101,19 +112,16 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
 
         if (playerKickController != null)
-            playerKickController.OnKickImpact += LaunchBall;
+            playerKickController.OnKickImpact += OnAnimationKickImpact;
 
         SetWorldIndicator(false, Vector3.zero);
     }
 
     void Start()
     {
-        // Reset global score at the start of a new game
         ScoreData.WhiteScore = 0;
         ScoreData.BlackScore = 0;
 
-        // The snapshot of initial positions is taken by PenaltyResetController.Awake()
-        // which runs before this Start(). playerTransform kept for legacy compatibility.
         if (playerTransform != null && resetController == null)
         {
             playerStartPos = playerTransform.position;
@@ -121,40 +129,49 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
 
         ApplyAttemptSettings();
+        phase = TurnPhase.WaitingForInput;
+        selectorUI?.ShowIdleHint();
     }
 
     void OnDestroy()
     {
         if (playerKickController != null)
-            playerKickController.OnKickImpact -= LaunchBall;
+            playerKickController.OnKickImpact -= OnAnimationKickImpact;
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        switch (phase)
         {
-            if (!hasShotBeenFired)
-                ToggleSelectionMode();
-            return;
+            case TurnPhase.WaitingForInput:
+                if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                    OpenSelectionGrid();
+                break;
+
+            case TurnPhase.Selecting:
+                if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                {
+                    CloseSelectionGrid();
+                    break;
+                }
+                HandleNavigation();
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+                    ConfirmShot();
+                break;
+
+            // BallInFlight, ResettingForNext, GameOver → no input accepted
         }
-
-        if (!isSelectingTarget || hasShotBeenFired) return;
-
-        HandleNavigation();
-
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
-            ConfirmShot();
     }
 
     // ── Per-attempt configuration ─────────────────────────────────────
 
-    /// <summary>Applies speeds and accuracy for the current attempt and updates the HUD.</summary>
+    /// <summary>Applies speeds / accuracy for currentAttempt and refreshes the always-visible HUD.</summary>
     void ApplyAttemptSettings()
     {
         int idx = Mathf.Clamp(currentAttempt, 0, maxAttempts - 1);
 
-        if (ballController != null && ballSpeedsPerAttempt.Length > idx)
-            ballController.launchSpeed = ballSpeedsPerAttempt[idx];
+        if (ballSpeedsPerAttempt.Length > idx)
+            currentMaxBallSpeed = ballSpeedsPerAttempt[idx];
 
         if (goalkeeperController != null && keeperSpeedsPerAttempt.Length > idx)
             goalkeeperController.moveSpeed = keeperSpeedsPerAttempt[idx];
@@ -162,32 +179,41 @@ public class PenaltyTargetSelector : MonoBehaviour
         if (keeperAccuracyPerAttempt.Length > idx)
             reactionAccuracy = keeperAccuracyPerAttempt[idx];
 
-        selectorUI?.UpdateAttemptDisplay(currentAttempt + 1, maxAttempts, goalsScored);
+        // Always update the persistent counters (attempt + goals) — these should never disappear.
+        RefreshPersistentHUD();
 
-        Debug.Log($"[PenaltyTargetSelector] Intento {currentAttempt + 1}/{maxAttempts} " +
-                  $"| balón={ballController?.launchSpeed} " +
-                  $"| portero={goalkeeperController?.moveSpeed} " +
+        Debug.Log($"[PTS] Intento {currentAttempt + 1}/{maxAttempts} " +
+                  $"| maxVel={currentMaxBallSpeed} | portero={goalkeeperController?.moveSpeed} " +
                   $"| precisión={reactionAccuracy:P0}");
     }
 
-    // ── Selection mode ────────────────────────────────────────────────
-
-    void ToggleSelectionMode()
+    /// <summary>
+    /// Updates only the always-visible attempt / goals counters.
+    /// Safe to call at any time — these labels must never be hidden during gameplay.
+    /// </summary>
+    void RefreshPersistentHUD()
     {
-        isSelectingTarget = !isSelectingTarget;
+        selectorUI?.UpdateAttemptDisplay(currentAttempt + 1, maxAttempts, goalsScored);
+    }
 
-        if (isSelectingTarget)
-        {
-            selectedIndex = 4;
-            selectorUI?.ShowUI(true);
-            selectorUI?.UpdateSelection(selectedIndex, targetPoints[selectedIndex].name);
-            SetWorldIndicator(true, targetPoints[selectedIndex].position);
-        }
-        else
-        {
-            selectorUI?.ShowUI(false);
-            SetWorldIndicator(false, Vector3.zero);
-        }
+    // ── Selection grid ────────────────────────────────────────────────
+
+    void OpenSelectionGrid()
+    {
+        phase = TurnPhase.Selecting;
+        selectionStartTime = Time.time;
+        selectedIndex = 4;
+        selectorUI?.ShowUI(true);
+        selectorUI?.UpdateSelection(selectedIndex, targetPoints[selectedIndex].name);
+        SetWorldIndicator(true, targetPoints[selectedIndex].position);
+    }
+
+    void CloseSelectionGrid()
+    {
+        phase = TurnPhase.WaitingForInput;
+        selectorUI?.ShowUI(false);
+        SetWorldIndicator(false, Vector3.zero);
+        selectorUI?.ShowIdleHint();
     }
 
     // ── Navigation ────────────────────────────────────────────────────
@@ -212,24 +238,33 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
     }
 
-    // ── Shot ─────────────────────────────────────────────────────────
+    // ── Shot ──────────────────────────────────────────────────────────
 
     void ConfirmShot()
     {
-        hasShotBeenFired  = true;
-        isSelectingTarget = false;
+        // Hide selection grid and world indicator immediately
+        selectorUI?.ShowUI(false);
+        SetWorldIndicator(false, Vector3.zero);
+        // Keep attempt/goals labels visible — do NOT call HideAllUI here
+        selectorUI?.HideSelectionOnlyUI();
 
-        // Hide ALL HUD text immediately so nothing lingers during ball flight
-        selectorUI?.HideAllUI();
+        // Dynamic launch speed based on reaction time
+        float selectionDuration = Time.time - selectionStartTime;
+        float t            = Mathf.InverseLerp(fastSelectionThreshold, slowSelectionThreshold, selectionDuration);
+        float dynamicSpeed = Mathf.Lerp(currentMaxBallSpeed, minBallSpeed, t);
 
-        // Keep the world indicator on the target point while the ball is in flight
-        Vector3 targetPos = targetPoints[selectedIndex].position;
-        SetWorldIndicator(true, targetPos);
+        if (ballController != null)
+            ballController.launchSpeed = dynamicSpeed;
+
+        Debug.Log($"[PTS] Selección en {selectionDuration:F1}s → vel={dynamicSpeed:F1}");
 
         pendingTarget = targetPoints[selectedIndex];
 
         int keeperIndex = ChooseGoalkeeperTarget(selectedIndex);
         goalkeeperController?.PrepareReaction(targetPoints[keeperIndex]);
+
+        // Transition to BallInFlight BEFORE starting coroutines
+        phase = TurnPhase.BallInFlight;
 
         if (playerKickController != null)
         {
@@ -254,39 +289,49 @@ public class PenaltyTargetSelector : MonoBehaviour
         LaunchBall();
     }
 
-    /// <summary>Launches the ball toward the pending target. Idempotent — fires only once per shot.</summary>
+    // Called by PlayerKickController animation event
+    private void OnAnimationKickImpact()
+    {
+        if (phase == TurnPhase.BallInFlight)
+            LaunchBall();
+    }
+
+    /// <summary>Launches the ball. Idempotent — safe to call from animation event AND fallback.</summary>
     private void LaunchBall()
     {
         if (pendingTarget == null || ballController == null) return;
 
+        // Cancel the fallback coroutine if the animation event already fired
         if (fallbackCoroutine != null)
         {
             StopCoroutine(fallbackCoroutine);
             fallbackCoroutine = null;
         }
 
-        // LaunchToward adds an arc to compensate gravity so the ball actually crosses the goal line.
-        ballController.LaunchToward(pendingTarget.position);
+        Vector3 target = pendingTarget.position;
         pendingTarget = null;
 
-        // Start timeout in case the ball escapes without hitting any trigger
-        outcomeHandled = false;
-        if (ballTimeoutCoroutine != null) StopCoroutine(ballTimeoutCoroutine);
+        ballController.LaunchToward(target);
+
+        // Cancel any stale timeout from a previous turn (safety net)
+        if (ballTimeoutCoroutine != null)
+        {
+            StopCoroutine(ballTimeoutCoroutine);
+            ballTimeoutCoroutine = null;
+        }
         ballTimeoutCoroutine = StartCoroutine(BallTimeout());
     }
 
-    /// <summary>
-    /// Fires if neither GoalLineTrigger nor GoalKeeperSaveTrigger report an outcome
-    /// within <see cref="ballTimeoutSeconds"/>. Counts the attempt as a miss and resets.
-    /// </summary>
+    /// <summary>Forces a miss if the ball leaves the field without hitting any trigger.</summary>
     IEnumerator BallTimeout()
     {
         yield return new WaitForSeconds(ballTimeoutSeconds);
 
-        if (!outcomeHandled)
+        // Only fire if we are still waiting for an outcome
+        if (phase == TurnPhase.BallInFlight)
         {
-            Debug.Log("[PenaltyTargetSelector] Timeout: el balón salió sin resultado. Contando como fallo.");
-            OnGoalkeeperSaved();   // counts as a miss / keeper win
+            Debug.Log("[PTS] Timeout: balón fuera sin resultado → fallo");
+            ProcessOutcome(isGoal: false);
         }
     }
 
@@ -303,7 +348,7 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
         else
         {
-            int rand = Random.Range(0, Columns - 1);
+            int rand  = Random.Range(0, Columns - 1);
             keeperCol = rand >= shotCol ? rand + 1 : rand;
         }
 
@@ -313,43 +358,34 @@ public class PenaltyTargetSelector : MonoBehaviour
 
     // ── Outcome callbacks ─────────────────────────────────────────────
 
-    private const float ResetDelay  = 5f;   // unified delay for both goal and save
-    private const float FinishDelay = 5f;
-
     /// <summary>Called by GoalLineTrigger when the ball crosses the goal line.</summary>
     public void OnGoalScored()
     {
-        if (outcomeHandled) return;
-        outcomeHandled = true;
-
-        if (ballTimeoutCoroutine != null)
-        {
-            StopCoroutine(ballTimeoutCoroutine);
-            ballTimeoutCoroutine = null;
-        }
-
-        goalkeeperController?.Disarm();
-
-        goalsScored++;
-        ScoreData.WhiteScore = goalsScored;
-
-        if (goalParticles != null)
-            goalParticles.Play();
-
-        currentAttempt++;
-
-        if (currentAttempt >= maxAttempts)
-            StartCoroutine(FinishGame(FinishDelay));
-        else
-            StartCoroutine(ResetForNextAttempt(ResetDelay));
+        if (phase != TurnPhase.BallInFlight) return;
+        Debug.Log("[PTS] GOL confirmado");
+        ProcessOutcome(isGoal: true);
     }
 
-    /// <summary>Called by GoalKeeperSaveTrigger when the keeper stops the ball, or by BallTimeout on a miss.</summary>
+    /// <summary>Called by GoalKeeperSaveTrigger when the keeper contacts the ball.</summary>
     public void OnGoalkeeperSaved()
     {
-        if (outcomeHandled) return;
-        outcomeHandled = true;
+        if (phase != TurnPhase.BallInFlight) return;
+        Debug.Log("[PTS] ATAJADA confirmada");
+        ProcessOutcome(isGoal: false);
+    }
 
+    // ── Central outcome handler ───────────────────────────────────────
+
+    /// <summary>
+    /// Single entry point for all outcomes (goal, save, timeout).
+    /// Only accepted while phase == BallInFlight — the phase check is the gate.
+    /// </summary>
+    private void ProcessOutcome(bool isGoal)
+    {
+        // Immediately move out of BallInFlight so no second outcome can sneak in
+        phase = TurnPhase.ResettingForNext;
+
+        // Stop the timeout coroutine
         if (ballTimeoutCoroutine != null)
         {
             StopCoroutine(ballTimeoutCoroutine);
@@ -357,34 +393,56 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
 
         goalkeeperController?.Disarm();
-        ScoreData.BlackScore++;
 
+        if (isGoal)
+        {
+            goalsScored++;
+            ScoreData.WhiteScore = goalsScored;
+
+            if (goalParticles != null)
+                goalParticles.Play();
+        }
+        else
+        {
+            ScoreData.BlackScore++;
+        }
+
+        // Update HUD immediately so the player sees the result
         currentAttempt++;
+        RefreshPersistentHUD();
+
+        Debug.Log($"[PTS] Intento {currentAttempt}/{maxAttempts} completo — Goles: {goalsScored}");
 
         if (currentAttempt >= maxAttempts)
-            StartCoroutine(FinishGame(FinishDelay));
+        {
+            if (resetCoroutine != null) StopCoroutine(resetCoroutine);
+            resetCoroutine = StartCoroutine(FinishGame());
+        }
         else
-            StartCoroutine(ResetForNextAttempt(ResetDelay));
+        {
+            if (resetCoroutine != null) StopCoroutine(resetCoroutine);
+            resetCoroutine = StartCoroutine(ResetForNextAttempt());
+        }
     }
 
     // ── Reset flow ────────────────────────────────────────────────────
 
-    IEnumerator ResetForNextAttempt(float delay)
-    {
-        // Wait, then stop particles first so they vanish before the actors move
-        yield return new WaitForSeconds(delay - 0.5f);
-        StopParticles();
+    private const float ResetDelay  = 3.5f;
+    private const float FinishDelay = 3.5f;
 
+    IEnumerator ResetForNextAttempt()
+    {
+        yield return new WaitForSeconds(ResetDelay - 0.5f);
+        StopParticles();
         yield return new WaitForSeconds(0.5f);
 
-        // Full positional + animation reset via PenaltyResetController (snapshot-based)
+        // Restore all actor positions
         if (resetController != null)
         {
             resetController.FullReset();
         }
         else
         {
-            // Fallback: legacy path if PenaltyResetController is not wired
             ballController?.ResetBall();
             goalkeeperController?.ResetPosition();
 
@@ -396,68 +454,59 @@ public class PenaltyTargetSelector : MonoBehaviour
             playerKickController?.ResetAnimator();
         }
 
+        // Apply new attempt settings BEFORE showing feedback
         ApplyAttemptSettings();
 
-        hasShotBeenFired  = false;
-        outcomeHandled    = false;
-        selectedIndex     = 4;
-        isSelectingTarget = false;
         SetWorldIndicator(false, Vector3.zero);
 
-        // Flash a visible message so the player knows a new attempt has started.
-        // ShowNewAttemptFeedback internally restores the idle hint when it finishes.
+        // Show "Intento X de Y" flash, then restore idle hint
         selectorUI?.ShowNewAttemptFeedback(currentAttempt + 1, maxAttempts);
+
+        // Allow input again
+        phase = TurnPhase.WaitingForInput;
+
+        resetCoroutine = null;
     }
 
-    IEnumerator FinishGame(float delay)
+    IEnumerator FinishGame()
     {
-        yield return new WaitForSeconds(delay - 0.5f);
+        yield return new WaitForSeconds(FinishDelay - 0.5f);
         StopParticles();
-
         yield return new WaitForSeconds(0.5f);
 
-        selectorUI?.HideAllUI();
+        phase = TurnPhase.GameOver;
         SetWorldIndicator(false, Vector3.zero);
+        selectorUI?.HideSelectionOnlyUI();
 
         if (gameEndUI != null)
         {
-            // Inline end-of-game panel
             gameEndUI.ShowResults(goalsScored, maxAttempts);
         }
         else
         {
-            // Fallback: load the score scene directly
-            Debug.Log($"[PenaltyTargetSelector] GameEndUI no asignado — cargando escena '{scoreSceneName}'");
+            Debug.Log($"[PTS] GameEndUI no asignado → cargando '{scoreSceneName}'");
             SceneManager.LoadScene(scoreSceneName);
         }
+
+        resetCoroutine = null;
     }
 
-    // ── Restart (called by GameEndUI.PlayAgain) ───────────────────────
+    // ── Restart (called by GameEndUI) ─────────────────────────────────
 
-    /// <summary>
-    /// Resets the entire game to its initial state so the player can try again.
-    /// Called from the "Jugar de nuevo" button via GameEndUI.
-    /// </summary>
+    /// <summary>Resets the full game to attempt 1. Called from GameEndUI.PlayAgain().</summary>
     public void RestartGame()
     {
-        // Reset score counters
         currentAttempt = 0;
         goalsScored    = 0;
         ScoreData.WhiteScore = 0;
         ScoreData.BlackScore = 0;
 
-        // Reset all actors to their initial positions
         resetController?.FullReset();
-
-        // Restore first-attempt speeds and refresh HUD
         ApplyAttemptSettings();
 
-        // Clear input state
-        hasShotBeenFired  = false;
-        outcomeHandled    = false;
-        selectedIndex     = 4;
-        isSelectingTarget = false;
         SetWorldIndicator(false, Vector3.zero);
+        phase = TurnPhase.WaitingForInput;
+        selectorUI?.ShowIdleHint();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

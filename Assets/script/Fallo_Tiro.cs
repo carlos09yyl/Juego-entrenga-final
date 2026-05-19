@@ -1,14 +1,14 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
+/// <summary>
+/// DEPRECATED — replaced by PenaltyTargetSelector's BallTimeout coroutine.
+/// Self-disables on Awake to never interfere with the current penalty system.
+/// </summary>
 public class MissTrigger : MonoBehaviour
 {
-    private void OnTriggerEnter(Collider other)
+    void Awake()
     {
-        if (other.CompareTag("Ball"))
-        {
-            ScoreData.BlackScore++; // punto para el arquero
-            SceneManager.LoadScene("ScoreScene");
-        }
+        enabled = false;
+        Debug.LogWarning("[MissTrigger] Deshabilitado — la lógica de fallo la gestiona PenaltyTargetSelector.BallTimeout.");
     }
 }

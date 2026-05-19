@@ -1,15 +1,14 @@
 using UnityEngine;
 
+/// <summary>
+/// DEPRECATED — GoalArea reaction logic is now handled by GoalkeeperReactionZone.
+/// Self-disables on Awake to never interfere with the current penalty system.
+/// </summary>
 public class GoalAreaTrigger : MonoBehaviour
 {
-    public PenaltySystem penaltySystem;
-
-    private void OnTriggerEnter(Collider other)
+    void Awake()
     {
-        if (other.CompareTag("Ball"))
-        {
-            Debug.Log("Balón entró en GoalArea");
-            penaltySystem.OnBallEnteredGoalArea();
-        }
+        enabled = false;
+        Debug.LogWarning("[GoalAreaTrigger] Deshabilitado — usa GoalkeeperReactionZone.");
     }
 }
