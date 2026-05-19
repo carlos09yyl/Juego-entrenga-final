@@ -9,43 +9,39 @@ namespace TitleScreen
     public class MainMenuController : MonoBehaviour
     {
         private const string GameSceneName = "GameScene";
+        private const string RankingSceneName = "Ranking";
+        private const string CreditsSceneName = "Credits";
 
         [Header("Panels")]
         [SerializeField] private GameObject mainMenuPanel;
-        [SerializeField] private GameObject rankingPanel;
-        [SerializeField] private GameObject creditsPanel;
-
-        [Header("Sub-controllers")]
-        [SerializeField] private RankingPanelController rankingPanelController;
 
         private void Start()
         {
             ShowMainMenu();
         }
 
-        /// <summary>Shows the main menu and hides all other panels.</summary>
+        /// <summary>Shows the main menu.</summary>
         public void ShowMainMenu()
         {
-            SetPanelsActive(main: true, ranking: false, credits: false);
+            if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
         }
 
-        /// <summary>Loads the game scene.</summary>
+        /// <summary>Loads the game scene to start a new game.</summary>
         public void OnNewGame()
         {
             SceneManager.LoadScene(GameSceneName);
         }
 
-        /// <summary>Opens the ranking panel.</summary>
+        /// <summary>Loads the ranking scene.</summary>
         public void OnRanking()
         {
-            SetPanelsActive(main: false, ranking: true, credits: false);
-            rankingPanelController?.RefreshRanking();
+            SceneManager.LoadScene(RankingSceneName);
         }
 
-        /// <summary>Opens the credits panel.</summary>
+        /// <summary>Loads the credits scene.</summary>
         public void OnCredits()
         {
-            SetPanelsActive(main: false, ranking: false, credits: true);
+            SceneManager.LoadScene(CreditsSceneName);
         }
 
         /// <summary>Quits the application.</summary>
@@ -56,13 +52,6 @@ namespace TitleScreen
 #else
             Application.Quit();
 #endif
-        }
-
-        private void SetPanelsActive(bool main, bool ranking, bool credits)
-        {
-            if (mainMenuPanel != null) mainMenuPanel.SetActive(main);
-            if (rankingPanel != null)  rankingPanel.SetActive(ranking);
-            if (creditsPanel != null)  creditsPanel.SetActive(credits);
         }
     }
 }

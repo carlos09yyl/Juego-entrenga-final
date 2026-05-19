@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -41,6 +42,8 @@ public class GameEndUI : MonoBehaviour
     [Header("Back-references (set by PenaltyTargetSelector)")]
     public PenaltyTargetSelector penaltySelector;
 
+    private Coroutine buttonRevealCoroutine;
+
     // ── Outcome texts ─────────────────────────────────────────────────
     private const string OutcomePerfect = "¡Perfecto! Gol en todos los intentos";
     private const string OutcomeGood    = "¡Bien hecho! Anotaste {0} de {1}";
@@ -69,7 +72,6 @@ public class GameEndUI : MonoBehaviour
         if (resultPanel != null) resultPanel.SetActive(true);
         if (buttonPanel != null) buttonPanel.SetActive(false);
 
-        // Populate labels
         if (titleLabel != null)
             titleLabel.text = "Penales finalizados";
 
@@ -79,8 +81,9 @@ public class GameEndUI : MonoBehaviour
         if (outcomeLabel != null)
             outcomeLabel.text = BuildOutcomeText(goalsScored, maxAttempts);
 
-        // Reveal buttons after a short delay so the player can read the result first
-        Invoke(nameof(RevealButtons), buttonRevealDelay);
+        if (buttonRevealCoroutine != null)
+            StopCoroutine(buttonRevealCoroutine);
+        buttonRevealCoroutine = StartCoroutine(RevealButtonsDelayed());
     }
 
     // ── Button handlers ───────────────────────────────────────────────
@@ -100,9 +103,11 @@ public class GameEndUI : MonoBehaviour
 
     // ── Helpers ───────────────────────────────────────────────────────
 
-    private void RevealButtons()
+    private IEnumerator RevealButtonsDelayed()
     {
+        yield return new WaitForSeconds(buttonRevealDelay);
         if (buttonPanel != null) buttonPanel.SetActive(true);
+        buttonRevealCoroutine = null;
     }
 
     private string BuildOutcomeText(int goals, int max)

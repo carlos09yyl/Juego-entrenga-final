@@ -273,17 +273,11 @@ public class PenaltyTargetSelector : MonoBehaviour
         }
         else
         {
-            StartCoroutine(TimedLaunch());
+            fallbackCoroutine = StartCoroutine(FallbackLaunch());
         }
     }
 
     IEnumerator FallbackLaunch()
-    {
-        yield return new WaitForSeconds(shotAnimDelay);
-        LaunchBall();
-    }
-
-    IEnumerator TimedLaunch()
     {
         yield return new WaitForSeconds(shotAnimDelay);
         LaunchBall();

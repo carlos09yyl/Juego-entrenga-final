@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -10,6 +11,7 @@ public class GoalLineTrigger : MonoBehaviour
     public PenaltyTargetSelector penaltySelector;
 
     private bool triggered = false;
+    private Coroutine rearmCoroutine;
 
     private void OnTriggerEnter(Collider other)
     {
@@ -18,11 +20,16 @@ public class GoalLineTrigger : MonoBehaviour
         triggered = true;
         Debug.Log("⚽ GOL DETECTADO");
 
-        // PenaltyTargetSelector.OnGoalScored() handles scoring, reset and turn advance.
         penaltySelector?.OnGoalScored();
 
-        Invoke(nameof(ReArm), 6f);
+        if (rearmCoroutine != null) StopCoroutine(rearmCoroutine);
+        rearmCoroutine = StartCoroutine(ReArmDelayed());
     }
 
-    private void ReArm() => triggered = false;
+    private IEnumerator ReArmDelayed()
+    {
+        yield return new WaitForSeconds(6f);
+        triggered = false;
+        rearmCoroutine = null;
+    }
 }

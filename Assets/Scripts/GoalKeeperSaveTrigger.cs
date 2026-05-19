@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -10,6 +11,7 @@ public class GoalKeeperSaveTrigger : MonoBehaviour
     public PenaltyTargetSelector penaltySelector;
 
     private bool triggered = false;
+    private Coroutine rearmCoroutine;
 
     private void OnCollisionEnter(Collision collision)
     {
@@ -29,11 +31,16 @@ public class GoalKeeperSaveTrigger : MonoBehaviour
         triggered = true;
         Debug.Log("🧤 ¡El arquero atajó!");
 
-        // PenaltyTargetSelector.OnGoalkeeperSaved() handles scoring, reset and turn advance.
         penaltySelector?.OnGoalkeeperSaved();
 
-        Invoke(nameof(ReArm), 6f);
+        if (rearmCoroutine != null) StopCoroutine(rearmCoroutine);
+        rearmCoroutine = StartCoroutine(ReArmDelayed());
     }
 
-    private void ReArm() => triggered = false;
+    private IEnumerator ReArmDelayed()
+    {
+        yield return new WaitForSeconds(6f);
+        triggered = false;
+        rearmCoroutine = null;
+    }
 }

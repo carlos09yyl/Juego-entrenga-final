@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: df11f11940912f44eb002393fb158c7d
+guid: 9fa50f24b5b3d04439619b856c1259fb
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -84,12 +84,12 @@ TextureImporter:
     buildTarget: Standalone
     maxTextureSize: 2048
     resizeAlgorithm: 0
-    textureFormat: -1
+    textureFormat: 12
     textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
-    overridden: 0
+    overridden: 1
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
@@ -123,13 +123,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "Dise\xF1o sin t\xEDtulo (15)_0"
+      name: Copia de Agregar algo de texto_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 1920
-        height: 1080
+        width: 2276
+        height: 1280
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -138,8 +138,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 9691ce6b38572ec4fb127bfa56b1a0a4
-      internalID: 1724533128
+      spriteID: b19df8a3f4db6c244b93c27be077ec73
+      internalID: -782568550
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: c984e9dcda4a98f4f92aa9925a1f1419
+    spriteID: 5b962c9a8e36b6d40b5fb4934a932de1
     internalID: 0
     vertices: []
     indices: 
@@ -158,7 +158,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "Dise\xF1o sin t\xEDtulo (15)_0": 1724533128
+      Copia de Agregar algo de texto_0: -782568550
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

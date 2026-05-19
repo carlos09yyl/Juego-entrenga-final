@@ -194,6 +194,7 @@ public class GoalkeeperController : MonoBehaviour
 
     void ResetAllTriggers()
     {
+        if (animator == null) return;
         animator.ResetTrigger("Left");
         animator.ResetTrigger("Right");
         animator.ResetTrigger("Center");

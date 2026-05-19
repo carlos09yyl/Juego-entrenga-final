@@ -164,16 +164,17 @@ public class TargetSelectorUI : MonoBehaviour
 
     private IEnumerator FlashFeedback(TextMeshProUGUI label, int attemptNumber, int maxAttempts)
     {
+        if (label == null) yield break;
+
         string originalText  = label.text;
         Color  originalColor = label.color;
 
         label.text  = $"¡Intento {attemptNumber} de {maxAttempts}!\nPresiona <b>Enter</b> para apuntar";
-        label.color = new Color(1f, 0.9f, 0f, 1f);   // bright yellow
+        label.color = new Color(1f, 0.9f, 0f, 1f);
         label.gameObject.SetActive(true);
 
         yield return new WaitForSeconds(feedbackDuration);
 
-        // Restore hint text and color
         label.text  = HintIdle;
         label.color = originalColor;
 
