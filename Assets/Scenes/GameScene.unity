@@ -213,7 +213,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 28.48
+      value: 27.147
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalPosition.y
@@ -221,11 +221,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 9.89
+      value: 8.685
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.997007
+      value: 0.909667
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalRotation.x
@@ -233,7 +233,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.07731184
+      value: 0.41533834
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalRotation.z
@@ -245,7 +245,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 8.868
+      value: 49.081
       objectReference: {fileID: 0}
     - target: {fileID: 2563297373110213474, guid: 6c7f06c6a702d4d41bba4b5576adc82c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -2295,15 +2295,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 023fcaeae3558fb44bd88d26765f867d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PenaltySystem
-  ballController: {fileID: 1890283283}
-  goalkeeperController: {fileID: 155784491}
-  divePoints:
-  - {fileID: 1135070442}
-  - {fileID: 1050478118}
-  - {fileID: 1414196544}
-  - {fileID: 2145490590}
-  - {fileID: 1087873558}
-  kickDelay: 2.5
 --- !u!4 &958106057
 Transform:
   m_ObjectHideFlags: 0

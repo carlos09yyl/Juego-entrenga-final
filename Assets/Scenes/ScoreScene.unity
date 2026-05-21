@@ -150,8 +150,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ScoreManager
   scoreText: {fileID: 1135111466}
   outcomeText: {fileID: 0}
-  playAgainButton: {fileID: 0}
-  mainMenuButton: {fileID: 0}
+  playAgainButton: {fileID: 353097492}
+  mainMenuButton: {fileID: 755022975}
 --- !u!4 &30733783
 Transform:
   m_ObjectHideFlags: 0
