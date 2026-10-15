@@ -25,7 +25,7 @@ public class PenaltyResetController : MonoBehaviour
     public PlayerKickController playerKickController;
 
     // ── Animator idle state names ─────────────────────────────────────
-    private const string KeeperIdleState = "mixamo_com";
+    private const string KeeperIdleState = "Idle";
 
     // ── Snapshot taken at scene start ─────────────────────────────────
     private Vector3    ballStartPos;
@@ -116,6 +116,15 @@ public class PenaltyResetController : MonoBehaviour
     {
         if (ballRigidbody == null) return;
 
+        // el BallController tambien apaga el vuelo con efecto y la gravedad
+        var control = ballRigidbody.GetComponent<BallController>();
+        if (control != null && control.startPosition != null)
+        {
+            control.ResetBall();
+            return;
+        }
+
+        ballRigidbody.useGravity      = false;
         ballRigidbody.linearVelocity  = Vector3.zero;
         ballRigidbody.angularVelocity = Vector3.zero;
         // Move via MovePosition so the physics engine acknowledges the teleport
@@ -125,25 +134,27 @@ public class PenaltyResetController : MonoBehaviour
 
     private void ResetKeeper()
     {
-        // Stop internal movement coroutines and clear flags via the controller
-        keeperController?.ResetPosition(keeperStartPos, keeperStartRot);
-
-        // Rigidbody hard-reset — clears velocity and confirms position
-        if (keeperRigidbody != null)
+        // El controlador del arquero deja posicion, Rigidbody y animacion como al inicio
+        if (keeperController != null)
         {
-            keeperRigidbody.linearVelocity  = Vector3.zero;
-            keeperRigidbody.angularVelocity = Vector3.zero;
-            keeperRigidbody.MovePosition(keeperStartPos);
-            keeperRigidbody.MoveRotation(keeperStartRot);
+            keeperController.ResetPosition(keeperStartPos, keeperStartRot);
+            return;
         }
 
-        // Force idle animation as a safety net (GoalkeeperController.ResetPosition already does this)
+        if (keeperRigidbody != null)
+        {
+            if (!keeperRigidbody.isKinematic)
+            {
+                keeperRigidbody.linearVelocity  = Vector3.zero;
+                keeperRigidbody.angularVelocity = Vector3.zero;
+            }
+            keeperRigidbody.position = keeperStartPos;
+            keeperRigidbody.rotation = keeperStartRot;
+        }
+
         if (keeperAnimator != null)
         {
-            keeperAnimator.ResetTrigger("Left");
-            keeperAnimator.ResetTrigger("Right");
-            keeperAnimator.ResetTrigger("Center");
-            keeperAnimator.ResetTrigger("Jump");
+            keeperAnimator.speed = 1f;
             keeperAnimator.Play(KeeperIdleState, 0, 0f);
             keeperAnimator.Update(0f);
         }
@@ -153,10 +164,14 @@ public class PenaltyResetController : MonoBehaviour
     {
         if (playerRigidbody != null)
         {
-            playerRigidbody.linearVelocity  = Vector3.zero;
-            playerRigidbody.angularVelocity = Vector3.zero;
-            playerRigidbody.MovePosition(playerStartPos);
-            playerRigidbody.MoveRotation(playerStartRot);
+            if (!playerRigidbody.isKinematic)
+            {
+                playerRigidbody.linearVelocity  = Vector3.zero;
+                playerRigidbody.angularVelocity = Vector3.zero;
+            }
+            playerRigidbody.position = playerStartPos;
+            playerRigidbody.rotation = playerStartRot;
+            playerTransform?.SetPositionAndRotation(playerStartPos, playerStartRot);
         }
         else if (playerTransform != null)
         {
